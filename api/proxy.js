@@ -1,30 +1,44 @@
-export default async function handler(req, res) {
-  if (!["GET", "POST", "OPTIONS"].includes(req.method)) {
-    return res.status(405).end();
-  }
+import { HttpsProxyAgent } from 'https-proxy-agent';
+import fetch from 'node-fetch';
 
-  // CORS preflight
-  if (req.method === "OPTIONS") {
-    res.setHeader("Access-Control-Allow-Origin", "*");
-    res.setHeader("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
-    res.setHeader("Access-Control-Allow-Headers", "*");
+export default async function handler(req, res) {
+  // 1. Handle CORS headers
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, PATCH, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', '*');
+
+  // Handle Preflight request
+  if (req.method === 'OPTIONS') {
     return res.status(200).end();
   }
 
-  const url = req.query.url;
-  if (!url) return res.status(400).send("No url");
+  const targetUrl = req.query.url;
 
-  const r = await fetch(url, {
-    method: req.method,
-    headers: {
-      "user-agent": req.headers["user-agent"] || "Mozilla/5.0",
-      "content-type": req.headers["content-type"] || "application/json",
-    },
-    body: req.method === "POST" ? JSON.stringify(req.body) : undefined,
-  });
+  if (!targetUrl) {
+    return res.status(400).send("Missing URL parameter");
+  }
 
-  const data = await r.arrayBuffer();
+  // 2. Setup the Proxy Agent
+  const proxyUrl = 'http://kiiuqioq:kossz8s8m335@31.59.20.176:6754';
+  const agent = new HttpsProxyAgent(proxyUrl);
 
-  res.setHeader("Access-Control-Allow-Origin", "*");
-  res.status(r.status).send(Buffer.from(data));
+  try {
+    // 3. Perform the request through the proxy
+    const response = await fetch(targetUrl, {
+      method: req.method,
+      agent: agent,
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+      }
+    });
+
+    const contentType = response.headers.get('content-type');
+    const data = await response.arrayBuffer();
+
+    res.setHeader('Content-Type', contentType);
+    return res.status(response.status).send(Buffer.from(data));
+
+  } catch (e) {
+    return res.status(500).send("Proxy Error: " + e.message);
+  }
 }
